@@ -111,6 +111,10 @@
       "title": "Scheduled Tasks",
       "desc": "Run commands or HTTP requests on a schedule"
     },
+    "plugins": {
+      "title": "Plugin Center",
+      "desc": "Register and supervise external plugin services, proxying their pages"
+    },
     "notify": {
       "title": "Notifications",
       "desc": "Push events to Telegram, email, WeCom and more"

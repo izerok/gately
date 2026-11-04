@@ -498,6 +498,24 @@
         "storage"
       ],
       "sizeKB": 128
+    },
+    {
+      "id": "plugin",
+      "group": "tools",
+      "core": false,
+      "tag": "no_plugin",
+      "title": {
+        "zh-CN": "插件中心",
+        "zh-TW": "外掛中心",
+        "en": "Plugin Center"
+      },
+      "desc": {
+        "zh-CN": "注册并托管外部插件服务，反代插件页面",
+        "zh-TW": "註冊並託管外部外掛服務，反代外掛頁面",
+        "en": "Register and supervise external plugin services, proxying their pages"
+      },
+      "requires": [],
+      "sizeKB": 256
     }
   ],
   "languages": [

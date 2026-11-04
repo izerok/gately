@@ -33,6 +33,7 @@ var Catalog = []Info{
 	{ID: "perf", Title: "性能监控"},
 	{ID: "nettools", Title: "网络诊断"},
 	{ID: "backup", Title: "配置备份"},
+	{ID: "plugin", Title: "插件中心"},
 }
 
 // order 返回模块在 Catalog 中的位置，用作显示顺序。

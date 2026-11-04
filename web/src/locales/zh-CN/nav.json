@@ -111,6 +111,10 @@
       "title": "计划任务",
       "desc": "定时执行命令或 HTTP 请求"
     },
+    "plugins": {
+      "title": "插件中心",
+      "desc": "注册并托管外部插件服务，反代插件页面"
+    },
     "notify": {
       "title": "通知中心",
       "desc": "事件推送到 Telegram、邮件、企业微信等"

@@ -23,6 +23,7 @@ import {
   LayoutDashboard,
   Network,
   Power,
+  Puzzle,
   Radar,
   ScrollText,
   Server,
@@ -112,6 +113,7 @@ export const navGroups: NavGroup[] = [
       { path: '/nettools', titleKey: 'nav.items.nettools.title', icon: Activity, moduleId: 'nettools', descKey: 'nav.items.nettools.desc' },
       { path: '/docker', titleKey: 'nav.items.docker.title', icon: Container, moduleId: 'docker', descKey: 'nav.items.docker.desc' },
       { path: '/cron', titleKey: 'nav.items.cron.title', icon: CalendarClock, moduleId: 'cron', descKey: 'nav.items.cron.desc' },
+      { path: '/plugins', titleKey: 'nav.items.plugins.title', icon: Puzzle, moduleId: 'plugin', adminOnly: true, descKey: 'nav.items.plugins.desc' },
     ],
   },
   {
