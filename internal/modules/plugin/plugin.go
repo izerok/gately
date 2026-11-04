@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -86,6 +87,18 @@ type Plugin struct {
 	// Scopes 为插件声明的、调用 Gately API 时需要的权限（仅声明与展示，
 	// 实际授权仍由管理员创建 API 令牌时授予，见协议文档）
 	Scopes []string `json:"scopes"`
+	// Options 为插件选项（见协议文档第 10.4 节）：命令型插件启动时以
+	// PLUGIN_OPTIONS 环境变量注入；URL 型插件只作记录，不投递。
+	Options map[string]any `json:"options"`
+	// Capabilities 为插件包声明的能力（清单 capabilities）；本版只有 pages，
+	// 手动注册的插件留空。
+	Capabilities []string `json:"capabilities"`
+	// Source 为安装来源：手动注册留空；registry 安装为 "registry:<来源 ID>"，
+	// 本地目录安装为 "local"，上传安装为 "upload"。
+	Source string `json:"source"`
+	// InstallDir 为安装包所在目录（手动注册与 URL 型插件留空）；
+	// 卸载时管理员可勾选一并删除该目录。
+	InstallDir string `json:"installDir"`
 	// Secret 为反代时注入的共享密钥，创建时生成；列表与详情接口不返回它
 	Secret string `json:"-"`
 }
@@ -144,6 +157,9 @@ type View struct {
 type fileConfig struct {
 	// 用指针切片：新增/删除插件时已有 runtime 的指针不因底层数组重分配而失效。
 	Plugins []*Plugin `json:"plugins"`
+	// RegistrySources 为管理员配置的 registry 索引来源（见 distribution.go）；
+	// 官方源在本版以空源占位：未配置时列表接口自动补一条 URL 为空的官方源。
+	RegistrySources []*RegistrySource `json:"registrySources"`
 }
 
 // runtime 为单个插件的运行时状态。
@@ -174,6 +190,9 @@ type Module struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	// httpClientFn 由框架注入（module.HTTPClientAware），用于 registry 索引
+	// 与安装包下载，遵循“更新代理”设置；未注入时用 http.DefaultClient。
+	httpClientFn func() *http.Client
 }
 
 func New() *Module { return &Module{rts: map[string]*runtime{}} }
@@ -234,6 +253,19 @@ func (m *Module) Stop() error {
 }
 
 func (m *Module) saveLocked() error { return m.store.Save(ID, m.cfg) }
+
+// SetHTTPClient 实现 module.HTTPClientAware：框架在 Init 之前注入，
+// registry 相关外网请求经该客户端发出（遵循更新代理设置）。
+func (m *Module) SetHTTPClient(fn func() *http.Client) { m.httpClientFn = fn }
+
+func (m *Module) httpClient() *http.Client {
+	if m.httpClientFn != nil {
+		if c := m.httpClientFn(); c != nil {
+			return c
+		}
+	}
+	return http.DefaultClient
+}
 
 func (m *Module) find(id string) (*Plugin, *runtime, bool) {
 	for _, pl := range m.cfg.Plugins {
@@ -321,10 +353,19 @@ func (m *Module) startLocked(rt *runtime) {
 	for k, v := range p.Env {
 		env = append(env, k+"="+v)
 	}
+	// 选项以 JSON 注入 PLUGIN_OPTIONS（协议文档第 10.4 节；无选项时为 {}）。
+	// 注入失败不可能来自 JSON 输入（选项只经 JSON 接口进出），失败时退回 {}。
+	optionsJSON := "{}"
+	if p.Options != nil {
+		if b, err := json.Marshal(p.Options); err == nil {
+			optionsJSON = string(b)
+		}
+	}
 	env = append(env,
 		"PLUGIN_PORT="+strconv.Itoa(port),
 		"GATELY_PLUGIN_ID="+p.ID,
 		"GATELY_PLUGIN_NAME="+p.Name,
+		"PLUGIN_OPTIONS="+optionsJSON,
 	)
 	cmd.Env = env
 	stdout, err := cmd.StdoutPipe()
@@ -353,11 +394,15 @@ func (m *Module) startLocked(rt *runtime) {
 	go m.pipeLines(p.ID, stdout)
 	m.wg.Add(1)
 	go m.pipeLines(p.ID, stderr)
+	// done 必须按值捕获：重启时 startLocked 会换一个新的 rt.done，
+	// 旧进程的等待协程若按现值 close(rt.done)，会误关新通道，
+	// 新进程退出时再关一次即 panic（升级/重启路径实测触发）。
+	done := rt.done
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
 		_ = cmd.Wait()
-		close(rt.done)
+		close(done)
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		if rt.cmd == cmd && !rt.manualStop {
