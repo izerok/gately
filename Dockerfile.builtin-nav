@@ -1,0 +1,85 @@
+# Gately + 内置导航页的演示镜像。走上游 Dockerfile 的多阶段路子
+# （node 构建前端 → go 构建二进制 → 运行），上游 Dockerfile 本身不动，
+# 官方镜像的构建方式不受影响。底座有一处与上游不同：沙箱网关 DNS 与
+# Alpine 的 musl 解析器不兼容（node 与 apk 都会 EAI_AGAIN），所以构建期
+# 需要联网的阶段改用 glibc 底座（node:bookworm-slim、debian）；只产出
+# dist/ 与二进制，不影响运行产物。本变体的差异只在运行阶段：
+#   - 加 python3：导航页是纯标准库 Python 服务，没有它跑不起来
+#   - 预置导航页源码到 /opt/gately/builtin-plugins/nav
+#   - 入口脚本在首次启动时走模块自身的本地目录安装流把它装好并启用
+#   - 运行阶段不带 docker-cli / nftables（演示范围用不到，镜像更小）
+#
+# 沙箱构建注意：沙箱出口是 TLS 拦截代理，构建容器需要 hatch-egress CA。
+# 构建时把宿主 CA 挂载进构建容器即可（见 README 的构建命令）；
+# 挂载不存在时各阶段的 if 判断会跳过，用户机器上正常构建不受影响。
+
+# ---- 前端：node:24-bookworm-slim + corepack pnpm ----
+# 上游用 node:24-alpine；这里改用 bookworm-slim，只因沙箱网关 DNS 与 musl
+# 不兼容（实测 node 在 Alpine 里 EAI_AGAIN，在 bookworm-slim 里正常）。
+# 该阶段只产出 web/dist，不影响最终镜像里的二进制与插件。
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS web
+WORKDIR /src/web
+RUN corepack enable
+# 沙箱 TLS 拦截 CA：构建时挂载到 /tmp/hatch-egress-ca.crt，node 经
+# NODE_EXTRA_CA_CERTS 信任它（node:24-alpine 没有 update-ca-certificates）
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN if [ -f /tmp/hatch-egress-ca.crt ]; then \
+      export NODE_EXTRA_CA_CERTS=/tmp/hatch-egress-ca.crt; \
+    fi \
+    && pnpm install --frozen-lockfile
+COPY web/ ./
+ARG GATELY_LOCALES=
+RUN GATELY_LOCALES="$GATELY_LOCALES" pnpm build
+# 瘦身：dist 已产出，node_modules 与 pnpm store 不再需要。pnpm 的
+# node_modules 是到 store 的硬链接，删 store 不影响已装好的包；删两者
+# 让本阶段的最终层只剩 base + dist（vfs 驱动每层都是全量拷贝，层越小越省盘）。
+RUN rm -rf node_modules /root/.local/share/pnpm/store
+
+# ---- 后端：与上游一致（golang:1.26-alpine，CGO_ENABLED=0 静态二进制）----
+# Alpine 在此无妨：CGO_ENABLED=0 时 Go 用纯 Go 解析器（不走 musl），且
+# 该阶段的网络只需要 go mod 下载。
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+WORKDIR /src
+RUN if [ -f /tmp/hatch-egress-ca.crt ]; then \
+      mkdir -p /usr/local/share/ca-certificates \
+      && cp /tmp/hatch-egress-ca.crt /usr/local/share/ca-certificates/hatch-egress-ca.crt \
+      && if command -v update-ca-certificates >/dev/null 2>&1; then update-ca-certificates; \
+         elif [ -f /etc/ssl/certs/ca-certificates.crt ]; then cat /tmp/hatch-egress-ca.crt >> /etc/ssl/certs/ca-certificates.crt; fi; \
+    fi
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web /src/web/dist ./web/dist
+ARG VERSION=dev
+ARG COMMIT=none
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w -X github.com/wangwanjie/gately/internal/version.Version=${VERSION} -X github.com/wangwanjie/gately/internal/version.Commit=${COMMIT} -X github.com/wangwanjie/gately/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o /out/gately ./cmd/gately
+# 瘦身：二进制已产出，模块缓存不再需要（同 web 阶段的理由）。
+RUN go clean -modcache
+
+# ---- 运行阶段：debian + python3 + 入口脚本 + 预置插件 ----
+# 上游用 alpine；这里改用 debian:bookworm-slim，原因同 web 阶段（apk 走
+# musl 解析，在沙箱网关 DNS 下 EAI_AGAIN）。apt 在同一 RUN 里先把沙箱
+# CA 装进系统证书池再 update，保证沙箱内 apt 的 TLS 能通。
+FROM debian:bookworm-slim
+RUN if [ -f /tmp/hatch-egress-ca.crt ]; then \
+      mkdir -p /usr/local/share/ca-certificates \
+      && cp /tmp/hatch-egress-ca.crt /usr/local/share/ca-certificates/hatch-egress-ca.crt \
+      && if command -v update-ca-certificates >/dev/null 2>&1; then update-ca-certificates; fi; \
+    fi \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata curl bash python3 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/gately /usr/local/bin/gately
+COPY examples/plugin-nav /opt/gately/builtin-plugins/nav
+COPY deploy/builtin-nav-entrypoint.sh /usr/local/bin/builtin-nav-entrypoint.sh
+RUN chmod +x /usr/local/bin/builtin-nav-entrypoint.sh
+# 配置目录与上游一致用 /etc/gately，避免与迁移时沿用的 /data/... 挂载路径冲突
+ENV GATELY_CONFIG_DIR=/etc/gately
+VOLUME ["/etc/gately"]
+EXPOSE 16680
+ENTRYPOINT ["/usr/local/bin/builtin-nav-entrypoint.sh"]
