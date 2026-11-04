@@ -5,7 +5,10 @@
     </PageHeader>
 
     <el-alert v-if="createdSecret" :title="t('plugin.secretOnce')" type="warning" :closable="false" class="secret-alert">
-      <span class="mono">{{ createdSecret }}</span>
+      <div class="secret-row">
+        <span class="mono">{{ createdSecret }}</span>
+        <el-button text size="small" @click="copyText(createdSecret)">{{ t('common.copy') }}</el-button>
+      </div>
     </el-alert>
 
     <el-card class="market-card">
@@ -34,7 +37,7 @@
           <el-button v-if="currentSource && !(currentSource.id === 'official' && !currentSource.url && !currentSource.dir)" text size="small" type="danger" @click="removeSource">{{ t('common.delete') }}</el-button>
         </el-form-item>
       </el-form>
-      <el-alert v-if="indexError" :title="indexError" type="error" :closable="false" class="index-alert" />
+      <el-alert v-if="showIndexError" :title="indexError" type="error" :closable="false" class="index-alert" />
       <el-alert v-if="currentSource && !currentSource.url && !currentSource.dir" :title="t('plugin.officialEmpty')" type="info" :closable="false" class="index-alert" />
       <el-table :data="available" stripe style="width: 100%" :empty-text="t('plugin.marketEmpty')">
         <el-table-column prop="name" :label="t('common.name')" min-width="140">
@@ -58,7 +61,13 @@
       </el-table>
     </el-card>
 
-    <el-table :data="plugins" stripe style="width: 100%" :empty-text="t('plugin.empty')">
+    <el-card class="installed-card">
+      <template #header>
+        <div class="card-header">
+          <span>{{ t('plugin.installed') }}</span>
+        </div>
+      </template>
+      <el-table :data="plugins" stripe style="width: 100%" :empty-text="t('plugin.empty')">
       <el-table-column prop="name" :label="t('common.name')" min-width="140">
         <template #default="{ row }">
           <div>{{ row.icon ? `${row.icon} ` : '' }}{{ row.name }}</div>
@@ -80,6 +89,7 @@
       </el-table-column>
       <el-table-column :label="t('common.actions')" width="430">
         <template #default="{ row }">
+          <div class="row-actions">
           <el-button text size="small" :disabled="row.status.state !== 'running'" @click="openPage(row)">{{ t('plugin.open') }}</el-button>
           <el-button v-if="row.status.state !== 'running'" text size="small" :icon="Play" :disabled="!row.enabled" @click="act(row, 'start')">{{ t('plugin.start') }}</el-button>
           <el-button v-else text size="small" :icon="Square" @click="act(row, 'stop')">{{ t('plugin.stop') }}</el-button>
@@ -87,9 +97,11 @@
           <el-button text size="small" @click="openOptions(row)">{{ t('plugin.options') }}</el-button>
           <el-button text size="small" :icon="Pencil" @click="openEditor(row)">{{ t('common.edit') }}</el-button>
           <el-button text size="small" type="danger" :icon="Trash2" @click="openUninstall(row)">{{ t('common.delete') }}</el-button>
+        </div>
         </template>
       </el-table-column>
     </el-table>
+    </el-card>
 
     <LogCard url="/api/plugin/logs" clearable />
 
@@ -182,6 +194,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Pencil, Play, Plus, Puzzle, RotateCw, Square, Trash2 } from 'lucide-vue-next'
 import { api } from '../api'
+import { copyText } from '../composables/useClipboard'
 import PageHeader from '../components/PageHeader.vue'
 import LogCard from '../components/LogCard.vue'
 import StatusBadge, { type StatusType } from '../components/StatusBadge.vue'
@@ -262,6 +275,8 @@ const uploadInput = ref<HTMLInputElement | null>(null)
 const editingSource = ref<RegistrySource>({ id: '', name: '', kind: 'community', url: '', dir: '' })
 
 const currentSource = computed(() => sources.value.find((s) => s.id === selectedSource.value))
+// 空占位源已有自己的 info 提示，索引拉取失败的 error 提示与之重复，不再重复出现。
+const showIndexError = computed(() => !!indexError.value && !(currentSource.value && !currentSource.value.url && !currentSource.value.dir))
 const editorVisible = ref(false)
 const saving = ref(false)
 const createdSecret = ref('')
@@ -556,6 +571,27 @@ onBeforeUnmount(() => {
 }
 .market-card {
   margin-bottom: 16px;
+}
+.installed-card {
+  margin-bottom: 16px;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+.row-actions .el-button {
+  margin-left: 0;
+  white-space: nowrap;
+}
+.secret-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.secret-row .el-button {
+  flex-shrink: 0;
 }
 .card-header {
   display: flex;
