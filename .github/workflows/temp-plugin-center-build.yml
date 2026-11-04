@@ -48,7 +48,7 @@ jobs:
           docker rm gately-smoke
           test -n "$code" && test "$code" != "000"
       - name: Check python3
-        run: docker run --rm ghcr.io/izerok/gately-plugin-center-unofficial:plugin-center-v1.0 python3 --version
+        run: docker run --rm --entrypoint python3 ghcr.io/izerok/gately-plugin-center-unofficial:plugin-center-v1.0 --version
       - name: Push image
         run: docker push ghcr.io/izerok/gately-plugin-center-unofficial:plugin-center-v1.0
       - name: Save image tar
