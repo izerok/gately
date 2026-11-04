@@ -1,0 +1,40 @@
+# 临时：导航页内置镜像的 Actions 构建验证（不推 registry、不发版）。
+# 仅用于替代沙箱本地构建验证，用完即删。
+name: temp-nav-builtin-image-build
+on:
+  push:
+    branches: [plugin/nav-page]
+  workflow_dispatch:
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.builtin-nav
+          tags: gately-nav-builtin:local
+          push: false
+          load: true
+      - name: Smoke test (container up + nav auto-install)
+        run: |
+          docker run -d --name gately-nav -p 16680:16680 gately-nav-builtin:local
+          code=000
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:16680/ || true)
+            [ "$code" != "000" ] && break
+            sleep 2
+          done
+          echo "admin http code: $code"
+          [ "$code" = "000" ] && exit 1
+          ok=0
+          for i in $(seq 1 12); do
+            if docker logs gately-nav 2>&1 | grep -q '\[builtin\] nav running'; then ok=1; break; fi
+            sleep 5
+          done
+          docker logs gately-nav 2>&1 | tail -40
+          docker ps --filter name=gately-nav
+          [ "$ok" = "1" ] && echo 'SMOKE OK: nav running' || exit 1
