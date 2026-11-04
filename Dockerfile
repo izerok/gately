@@ -39,7 +39,7 @@ FROM alpine:3.23
 # 宿主机上 1.1.1 之前的 nft（如 Debian 12 / 飞牛的 1.0.6）执行 nft list ruleset 时会崩溃
 ARG WITH_DOCKER_CLI=1
 ARG WITH_NFTABLES=1
-RUN apk add --no-cache ca-certificates tzdata curl bash \
+RUN apk add --no-cache ca-certificates tzdata curl bash python3 \
     && if [ "$WITH_DOCKER_CLI" = 1 ]; then apk add --no-cache docker-cli docker-cli-compose; fi \
     && if [ "$WITH_NFTABLES" = 1 ]; then \
         echo "@nft https://dl-cdn.alpinelinux.org/alpine/v3.21/main" >> /etc/apk/repositories \
