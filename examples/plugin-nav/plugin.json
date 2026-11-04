@@ -1,0 +1,1 @@
+{"args":[],"capabilities":["pages"],"description":"命令型导航页插件：静态链接按分组展示，页内搜索，链接管理在插件页内完成，数据存 links.json。","entry":"nav.py","env":{},"healthPath":"/health","icon":"🧭","id":"nav","kind":"command","name":"导航页","options":{"title":"导航页"},"port":0,"scopes":[],"version":"0.1.0"}
