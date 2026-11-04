@@ -274,6 +274,12 @@ func (m *Module) handlePageRedirect(w http.ResponseWriter, r *http.Request) {
 // 剥离登录会话凭据（Cookie、Authorization），改以 X-Gately-* 头表明身份，
 // 插件不得直接信任浏览器带来的任何凭据，只能信任经 Gately 反代的请求。
 func (m *Module) handlePageProxy(w http.ResponseWriter, r *http.Request) {
+	// 插件页由管理后台同源 iframe 展示：去掉全局安全中间件（securityHeaders）
+	// 预先写上的 X-Frame-Options: DENY，否则浏览器拒绝在 iframe 里显示。
+	// 只影响本反代接口的响应（含未运行等错误响应，iframe 内才能看到错误文案）；
+	// 其他接口的 DENY 不受影响。注意 ModifyResponse 只能改上游响应头，
+	// 中间件预置的头必须在这里从下游 ResponseWriter 上删掉。
+	w.Header().Del("X-Frame-Options")
 	id := r.PathValue("id")
 	m.mu.Lock()
 	_, rt, found := m.find(id)
@@ -314,6 +320,12 @@ func (m *Module) handlePageProxy(w http.ResponseWriter, r *http.Request) {
 			pr.Out.Header.Set("X-Gately-Role", role)
 			pr.Out.Header.Set("X-Gately-Plugin-Token", secret)
 			pr.Out.Header.Set("X-Forwarded-Host", r.Host)
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			// 插件服务自身也可能带 X-Frame-Options（例如默认 DENY 的框架）；
+			// 反代只透传内容，帧策略由管理后台的同源 iframe 设计决定。
+			resp.Header.Del("X-Frame-Options")
+			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			httpx.Error(w, http.StatusBadGateway, "插件服务不可用：%v", err)
