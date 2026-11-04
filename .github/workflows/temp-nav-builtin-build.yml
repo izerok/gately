@@ -28,7 +28,7 @@ jobs:
           file: Dockerfile.builtin-nav
           tags: ghcr.io/izerok/gately-nav-builtin:test
           push: true
-      - name: Smoke test (pushed image: container up + nav auto-install)
+      - name: Smoke test (pushed image)
         run: |
           docker run -d --name gately-nav -p 16680:16680 ghcr.io/izerok/gately-nav-builtin:test
           code=000
