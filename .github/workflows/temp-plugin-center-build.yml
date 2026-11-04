@@ -2,6 +2,8 @@ name: temp-plugin-center-build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [plugin/protocol-v1]
 
 permissions:
   contents: read
