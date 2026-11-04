@@ -1,27 +1,36 @@
-# 临时：导航页内置镜像的 Actions 构建验证（不推 registry、不发版）。
-# 仅用于替代沙箱本地构建验证，用完即删。
+# 临时：导航页内置镜像的 Actions 构建 + 推 GHCR（tag: test）。
+# 镜像：ghcr.io/izerok/gately-nav-builtin:test
+# 用完即删；只要它还在分支上，每次推 plugin/nav-page 都会重新构建并重推 :test。
 name: temp-nav-builtin-image-build
 on:
   push:
     branches: [plugin/nav-page]
   workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
 jobs:
-  build-and-smoke:
+  build-push-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build image (no push)
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.builtin-nav
-          tags: gately-nav-builtin:local
-          push: false
-          load: true
-      - name: Smoke test (container up + nav auto-install)
+          tags: ghcr.io/izerok/gately-nav-builtin:test
+          push: true
+      - name: Smoke test (pushed image: container up + nav auto-install)
         run: |
-          docker run -d --name gately-nav -p 16680:16680 gately-nav-builtin:local
+          docker run -d --name gately-nav -p 16680:16680 ghcr.io/izerok/gately-nav-builtin:test
           code=000
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:16680/ || true)
