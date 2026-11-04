@@ -12,6 +12,7 @@
 // 信任边界（v1 明确不解决，见 docs/plugin-protocol-v1.md）：
 //   - 命令插件以 Gately 进程的操作系统用户身份运行，与 Gately 同权；
 //   - 插件页面与管理界面同源，页面脚本可凭当前会话调用 Gately API。
+//
 // 因此只安装完全信任的插件；沙箱、独立源与细粒度插件权限属于后续版本。
 package plugin
 
@@ -68,7 +69,7 @@ type Plugin struct {
 	// Kind 为 command 或 url
 	Kind string `json:"kind"`
 	// Command 为 command 型插件的可执行文件绝对路径
-	Command string `json:"command"`
+	Command string   `json:"command"`
 	Args    []string `json:"args"`
 	// Env 为注入给 command 型插件的额外环境变量（PLUGIN_PORT 等由框架追加）
 	Env map[string]string `json:"env"`
@@ -147,32 +148,32 @@ type fileConfig struct {
 
 // runtime 为单个插件的运行时状态。
 type runtime struct {
-	plug    *Plugin
-	cmd     *exec.Cmd
-	done    chan struct{}
-	target  *url.URL
-	state   string
-	pid     int
-	port    int
-	fails   int
+	plug     *Plugin
+	cmd      *exec.Cmd
+	done     chan struct{}
+	target   *url.URL
+	state    string
+	pid      int
+	port     int
+	fails    int
 	restarts int
-	lastErr string
-	lastOK  time.Time
-	started time.Time
+	lastErr  string
+	lastOK   time.Time
+	started  time.Time
 	// manualStop 为 true 时健康检查不再自动拉起
 	manualStop bool
 }
 
 // Module 实现 module.Module。
 type Module struct {
-	store *config.Store
-	logs  *logbuf.Buffer
-	mu    sync.Mutex
-	cfg   fileConfig
-	rts   map[string]*runtime
-	ctx   context.Context
+	store  *config.Store
+	logs   *logbuf.Buffer
+	mu     sync.Mutex
+	cfg    fileConfig
+	rts    map[string]*runtime
+	ctx    context.Context
 	cancel context.CancelFunc
-	wg    sync.WaitGroup
+	wg     sync.WaitGroup
 }
 
 func New() *Module { return &Module{rts: map[string]*runtime{}} }
