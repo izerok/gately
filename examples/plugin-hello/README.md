@@ -10,7 +10,15 @@ chmod +x hello.py
 # 然后 curl http://127.0.0.1:18080/ 与 /health
 ```
 
-## 在 Gately 里注册
+## 在 Gately 里安装（本地目录安装）
+
+本目录自带 `plugin.json` 清单，可直接作本地目录安装的测试夹具：
+
+管理界面 → 插件中心 → 插件市场 → 从本地目录安装 → 填本目录路径 →
+安装后即注册为命令型插件（entry `hello.py` 解析为安装目录下的绝对路径，
+工作目录即安装目录），点“打开”即见回显页。
+
+## 在 Gately 里注册（手动方式）
 
 1. 把 `hello.py` 放到 Gately 所在机器，例如 `/usr/local/bin/plugin-hello.py`；
 2. 管理界面 → 插件中心 → 添加插件：

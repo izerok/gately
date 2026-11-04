@@ -1,0 +1,1 @@
+{"args":[],"capabilities":["pages"],"description":"最小命令型插件示例：回显反代注入的头，/health 返回 ok。","entry":"hello.py","env":{},"healthPath":"/health","icon":"👋","id":"hello","kind":"command","name":"Hello","options":{},"port":0,"scopes":[],"version":"0.1.0"}
